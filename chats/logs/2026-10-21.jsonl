@@ -1,0 +1,10 @@
+{"role": "user", "content": "Amplify this: \"I am really annoyed about the delay with this project, I need it fixed right now.\" Keep my exact tone but make it sound strictly direct and professional."}
+{"role": "user", "content": "Amplify this: \"I am really annoyed about the delay with this project, I need it fixed right now.\" Keep my exact tone but make it sound strictly direct and professional."}
+{"role": "user", "content": "Amplify this: \"I am really annoyed about the delay with this project, I need it fixed right now.\" Keep my exact tone but make it sound strictly direct and professional."}
+{"role": "user", "content": "Amplify this: \"I am really annoyed about the delay with this project, I need it fixed right now.\" Keep my exact tone but make it sound strictly direct and professional."}
+{"role": "user", "content": "Amplify this: \"I am really annoyed about the delay with this project, I need it fixed right now.\" Keep my exact tone but make it sound strictly direct and professional."}
+{"role": "user", "content": "python -c \"import json; d=json.load(open('config.json')); d['api_model']='openai/gpt-oss-120b'; json.dump(d, open('config.json','w'), indent=4)\""}
+{"role": "user", "content": "Amplify this: \"I am really annoyed about the delay with this project, I need it fixed right now.\" Keep my exact tone but make it sound strictly direct and professional."}
+{"role": "assistant", "content": "I am extremely frustrated by this project's delay; I require an immediate resolution."}
+{"role": "user", "content": "thanks"}
+{"role": "assistant", "content": "You\u2019re welcome."}
