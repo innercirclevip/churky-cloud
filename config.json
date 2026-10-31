@@ -1,10 +1,10 @@
 {
-    "owner_name": "Fernando Marcos P\u00c3\u00a9rez",
-    "passphrase_hash": "d75ea55aa81bde4b64d2599cf43a3302a483c06db9bc31cd372b2cba484bd831",
-    "local_model": "qwen2.5:3b",
-    "api_model": "openai/gpt-oss-120b",
-    "vision_model": "qwen/qwen3.8-27b",
-    "max_history_turns": 50,
-    "require_identity": false,
-    "log_conversations": true
+  "owner_name": "Fernando Marcos Pérez",
+  "passphrase_hash": "9191067ded364d6f9cd28de81887ab16d334df6c61326db63baf324f209f923",
+  "local_model": "qwen2.5:3b",
+  "api_model": "openai/gpt-oss-120b",
+  "vision_model": "qwen/qwen3.8-27b",
+  "max_history_turns": 50,
+  "require_identity": false,
+  "log_conversations": true
 }
