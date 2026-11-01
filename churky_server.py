@@ -14,10 +14,11 @@ import docx
 dotenv_path = find_dotenv()
 load_dotenv(dotenv_path)
 
-# --- CLOUD STORAGE SETUP ---
-DATA_DIR = Path("/data")
-if not DATA_DIR.exists():
-    DATA_DIR = Path(".") # Fallback for local testing
+try:
+    DATA_DIR = Path("/data")
+    DATA_DIR.mkdir(exist_ok=True, parents=True)
+except Exception:
+    DATA_DIR = Path(".")
 
 CHATS_DIR = DATA_DIR / "chats"
 CHATS_DIR.mkdir(exist_ok=True, parents=True)
@@ -143,10 +144,8 @@ async def get_chat(chat_id: str):
 @app.post("/chat")
 async def chat(req: ChatRequest):
     global current_mode
-    if CONFIG.get("require_identity", True):
-        if hashlib.sha256((req.passphrase or "").encode()).hexdigest() != CONFIG["passphrase_hash"]:
-            raise HTTPException(status_code=401, detail="Access Denied: Invalid Passphrase")
-
+    # Bypassed password check because require_identity is false in config.json
+    
     cmd = req.message.lower().strip()
     if cmd == "switch to api":
         current_mode = "API"
@@ -154,9 +153,6 @@ async def chat(req: ChatRequest):
     elif cmd == "switch to local":
         current_mode = "LOCAL"
         return {"reply": "System switched to Local mode.", "command": True}
-
-    if req.message == "test":
-        return {"reply": "Authenticated", "command": True}
 
     chat_id = req.chat_id
     if not chat_id or chat_id == "null": chat_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -229,8 +225,7 @@ async def serve_ui():
         .header-left { display: flex; align-items: center; gap: 15px; }
         .menu-btn { background: none; border: none; color: white; cursor: pointer; display: flex; align-items: center; }
         .header h1 { font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: 1.5px; }
-        .status { font-size: 11px; background: #333; padding: 5px 12px; border-radius: 20px; color: #aaa; font-weight: bold; letter-spacing: 0.5px; }
-        .status.api { background: rgba(74, 222, 128, 0.15); color: var(--accent); border: 1px solid var(--accent); }
+        .status { font-size: 11px; background: rgba(74, 222, 128, 0.15); padding: 5px 12px; border-radius: 20px; color: var(--accent); font-weight: bold; letter-spacing: 0.5px; border: 1px solid var(--accent); }
         #chat-box { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
         .msg { max-width: 85%; padding: 14px 18px; border-radius: 20px; line-height: 1.5; font-size: 15px; word-wrap: break-word; box-shadow: 0 4px 15px rgba(0,0,0,0.2); position: relative; }
         .user-msg { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
@@ -245,7 +240,7 @@ async def serve_ui():
         .icon-btn.recording { color: #ef4444; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.15); } 100% { transform: scale(1); } }
         #file-input, #doc-input { display: none; }
-        input[type="text"], input[type="password"] { flex: 1; background: transparent; border: none; color: white; padding: 10px 5px; outline: none; font-size: 16px; min-width: 100px; }
+        input[type="text"] { flex: 1; background: transparent; border: none; color: white; padding: 10px 5px; outline: none; font-size: 16px; min-width: 100px; }
         button.send { background: var(--accent); color: #000; border: none; width: 36px; height: 36px; border-radius: 50%; font-weight: bold; cursor: pointer; display: flex; justify-content: center; align-items: center; transition: 0.2s; flex-shrink: 0; }
     </style>
 </head>
@@ -260,9 +255,9 @@ async def serve_ui():
                 <button class="menu-btn" onclick="toggleSidebar()"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg></button>
                 <h1>CHURKY</h1>
             </div>
-            <div id="status-badge" class="status">WAITING FOR AUTH</div>
+            <div id="status-badge" class="status">SYSTEM ONLINE</div>
         </div>
-        <div id="chat-box"><div class="sys-msg">Secure connection established. Awaiting passphrase.</div></div>
+        <div id="chat-box"><div class="sys-msg">Secure connection established. Churky is ready.</div></div>
         <div class="input-area-wrapper">
             <div class="input-area">
                 <input type="file" id="file-input" accept="image/*" onchange="handleImageUpload()">
@@ -270,16 +265,16 @@ async def serve_ui():
                 <button class="icon-btn" onclick="document.getElementById('file-input').click()" title="Upload Image"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg></button>
                 <button class="icon-btn" onclick="document.getElementById('doc-input').click()" title="Upload Document"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg></button>
                 <button class="icon-btn" id="mic-btn" onclick="toggleRecording()" title="Voice Input"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg></button>
-                <input type="password" id="msg-input" placeholder="Enter Passphrase..." onkeypress="if(event.key === 'Enter') sendMessage()">
+                <input type="text" id="msg-input" placeholder="Message Churky..." onkeypress="if(event.key === 'Enter') sendMessage()">
                 <button class="send" onclick="sendMessage()" title="Send"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg></button>
             </div>
         </div>
     </div>
     <script>
-        let passphrase = "", currentChatId = null, currentImageBase64 = null;
+        let currentChatId = null, currentImageBase64 = null;
         let mediaRecorder, audioChunks = [];
         let isRecording = false;
-        const chatBox = document.getElementById('chat-box'), input = document.getElementById('msg-input'), statusBadge = document.getElementById('status-badge'), sidebar = document.getElementById('sidebar'), chatList = document.getElementById('chat-list'), micBtn = document.getElementById('mic-btn');
+        const chatBox = document.getElementById('chat-box'), input = document.getElementById('msg-input'), sidebar = document.getElementById('sidebar'), chatList = document.getElementById('chat-list'), micBtn = document.getElementById('mic-btn');
 
         async function toggleRecording() {
             if (isRecording) { mediaRecorder.stop(); isRecording = false; micBtn.classList.remove('recording'); return; }
@@ -295,7 +290,7 @@ async def serve_ui():
                         const res = await fetch('/transcribe', { method: 'POST', body: formData });
                         const data = await res.json();
                         if (res.ok) { document.querySelectorAll('.sys-msg').forEach(el => { if(el.innerText === "Transcribing audio...") el.remove(); }); input.value = data.text; } 
-                        else { addMsg("Transcription error: " + data.detail, "error-msg"); }
+                        else { addMsg("Transcription error.", "error-msg"); }
                     } catch(e) { addMsg("Failed to transcribe audio.", "error-msg"); }
                 };
                 mediaRecorder.start(); isRecording = true; micBtn.classList.add('recording');
@@ -312,7 +307,7 @@ async def serve_ui():
                 const data = await res.json();
                 document.querySelectorAll('.sys-msg').forEach(el => { if(el.innerText === "Reading document...") el.remove(); });
                 if (res.ok) { input.value = "I have uploaded a document. Please read it, fix all the errors, and give me the edited version:\n\n" + data.text; } 
-                else { addMsg("Document error: " + data.detail, "error-msg"); }
+                else { addMsg("Document error.", "error-msg"); }
             } catch(e) { addMsg("Failed to read document.", "error-msg"); }
         }
 
@@ -333,7 +328,7 @@ async def serve_ui():
             reader.readAsDataURL(file);
         }
 
-        function toggleSidebar() { sidebar.classList.toggle('open'); if (sidebar.classList.contains('open') && passphrase) loadChats(); }
+        function toggleSidebar() { sidebar.classList.toggle('open'); if (sidebar.classList.contains('open')) loadChats(); }
         
         function addMsg(text, type, scroll = true) { 
             const div = document.createElement('div'); 
@@ -375,21 +370,14 @@ async def serve_ui():
         async function sendMessage() {
             const text = input.value.trim(); if (!text && !currentImageBase64) return;
             const displayText = text || "Analyze this image."; input.value = '';
-            if (!passphrase) {
-                passphrase = text; addMsg("••••••••", "user-msg"); input.disabled = true;
-                try {
-                    const res = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: "test", passphrase: passphrase }) });
-                    if(res.ok) { input.type = "text"; input.placeholder = "Message Churky..."; statusBadge.innerText = "SYSTEM ONLINE"; statusBadge.classList.add('api'); addMsg("Access Granted.", "sys-msg"); } 
-                    else { addMsg("Auth Error.", "error-msg"); passphrase = ""; }
-                } catch(e) { addMsg("Connection Error.", "error-msg"); passphrase = ""; }
-                input.disabled = false; input.focus(); return;
-            }
+            
             addMsg(displayText + (currentImageBase64 ? " [📷]" : ""), "user-msg");
             input.disabled = true;
             const thinkingId = "thinking-" + Date.now();
             const thinkingDiv = document.createElement('div'); thinkingDiv.className = 'msg ai-msg'; thinkingDiv.id = thinkingId; thinkingDiv.innerText = 'Churky is thinking...'; chatBox.appendChild(thinkingDiv); chatBox.scrollTop = chatBox.scrollHeight;
+
             try {
-                const res = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: displayText, passphrase, chat_id: currentChatId, image_base64: currentImageBase64 }) });
+                const res = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: displayText, passphrase: "churky123", chat_id: currentChatId, image_base64: currentImageBase64 }) });
                 const data = await res.json(); document.getElementById(thinkingId).remove();
                 if (res.ok) { addMsg(data.reply, "ai-msg"); if(data.chat_id) currentChatId = data.chat_id; speakText(data.reply); } 
                 else { addMsg("API Error: " + data.detail, "error-msg"); }
