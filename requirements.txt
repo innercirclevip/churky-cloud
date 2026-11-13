@@ -1,8 +1,9 @@
 fastapi
 uvicorn
 openai
-requests
 python-dotenv
+requests
 python-multipart
 PyPDF2
 python-docx
+anthropic
