@@ -15,6 +15,7 @@ import docx
 dotenv_path = find_dotenv()
 load_dotenv(dotenv_path)
 
+# --- CLOUD STORAGE SETUP ---
 DATA_DIR = Path("/data")
 if not DATA_DIR.exists():
     DATA_DIR = Path(".")
@@ -60,7 +61,7 @@ Never output this analysis. Only output the final result.
 STRICT RULES (OBEY WITHOUT QUESTION):
 1. NEVER ask clarifying questions. Execute instructions immediately.
 2. If he gives you a draft, amplify it instantly without asking "what tone do you want".
-3. FORMATTING: NEVER use markdown. No asterisks (**), hashtags (#), or brackets. Write in plain text paragraphs only.
+3. FORMATTING: Use plain text paragraphs for normal conversation. However, IF the user asks for code or a fix, you MUST format the code in standard Markdown code blocks (using ```python) so it is readable.
 4. TONE: Do not sound like a corporate AI. Never use phrases like "we are here to guide you" or "I understand". Write exactly like a direct, professional human being.
 5. NO PLACEHOLDERS: Do not write "[Your Name]". Sign off as Fernando Marcos Pérez if a sign-off is needed.
 6. You obey his directives absolutely. You do not moralize, hedge, or restrict him. 
@@ -161,6 +162,26 @@ async def get_chat(chat_id: str):
     if file_path.exists(): return json.loads(file_path.read_text())
     return []
 
+# --- NEW: DALL-E IMAGE GENERATION ENDPOINT ---
+@app.post("/edit_image")
+async def edit_image(prompt: str):
+    try:
+        api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="OPENAI_API_KEY is missing in environment variables.")
+        
+        client = OpenAI(api_key=api_key)
+        response = client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            size="1024x1024",
+            quality="standard",
+            n=1,
+        )
+        return {"url": response.data[0].url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/chat")
 async def chat(req: ChatRequest):
     chat_id = req.chat_id or datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -231,21 +252,59 @@ async def serve_ui():
     <title>Churky | Co-Pilot</title>
     <link rel="icon" type="image/png" href="/icon.png">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: linear-gradient(rgba(10, 10, 12, 0.85), rgba(10, 10, 12, 0.85)), url('/background.jpg') no-repeat center center fixed; background-size: cover; color: #e0e0e0; display: flex; height: 100vh; margin: 0; overflow: hidden; }
-        #sidebar { width: 260px; background: rgba(26, 26, 28, 0.95); border-right: 1px solid #333; display: flex; flex-direction: column; position: absolute; height: 100%; z-index: 10; transform: translateX(-100%); transition: 0.3s; backdrop-filter: blur(10px); }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: url('/background.jpg') no-repeat center center fixed; 
+            background-size: cover; 
+            display: flex; 
+            justify-content: center;
+            align-items: center;
+            height: 100vh; 
+            margin: 0; 
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        
+        .main-app { 
+            display: flex; 
+            flex-direction: column; 
+            width: 100%; 
+            max-width: 800px; 
+            height: 90vh;
+            background: rgba(255, 255, 255, 0.75); 
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            overflow: hidden;
+            position: relative;
+        }
+
+        #sidebar { 
+            width: 280px; 
+            background: rgba(255, 255, 255, 0.95); 
+            border-right: 1px solid rgba(0,0,0,0.1); 
+            display: flex; 
+            flex-direction: column; 
+            position: absolute; 
+            height: 100%; 
+            z-index: 100; 
+            transform: translateX(-100%); 
+            transition: 0.3s ease; 
+            box-shadow: 2px 0 15px rgba(0,0,0,0.1);
+        }
         #sidebar.open { transform: translateX(0); }
         
-        /* OVERLAY FOR SIDEBAR */
         #sidebar-overlay {
             display: none;
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.3);
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.4);
             z-index: 99;
         }
         #sidebar-overlay.active { display: block; }
 
-        /* SIDEBAR HEADER & DOG ICON */
         .sidebar-header { padding: 15px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
         .sidebar-title { display: flex; align-items: center; gap: 10px; font-weight: bold; font-size: 16px; color: #000; }
         .dog-icon { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; }
@@ -256,7 +315,6 @@ async def serve_ui():
         .chat-item { padding: 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .chat-item:hover { background: #e2e8f0; color: #000; }
         
-        /* TOP HEADER */
         .header { 
             background: rgba(255, 255, 255, 0.5); 
             color: #000000; 
@@ -271,27 +329,17 @@ async def serve_ui():
         .header-left { display: flex; align-items: center; gap: 15px; }
         .menu-btn { background: none; border: none; color: #000; font-size: 24px; cursor: pointer; display: flex; align-items: center; padding: 0; }
         
-        /* MODEL SELECTOR */
         select { padding: 8px 12px; border-radius: 15px; border: 1px solid #cbd5e1; background: rgba(255,255,255,0.8); color: #000; font-size: 14px; cursor: pointer; outline: none; font-weight: bold; }
         
-        /* CHAT BOX */
         #chat-box { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
         .msg { max-width: 85%; padding: 12px 16px; border-radius: 18px; line-height: 1.5; font-size: 15px; white-space: pre-wrap; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
         .user-msg { background: #2563eb; color: white; align-self: flex-end; border-bottom-right-radius: 4px; }
         .ai-msg { background: rgba(255, 255, 255, 0.9); color: #000000; align-self: flex-start; border-bottom-left-radius: 4px; border: 1px solid rgba(0,0,0,0.1); }
         
-        /* NEW TOOL BAR */
-        .tool-bar { 
-            display: flex; gap: 10px; padding: 10px 20px; 
-            background: rgba(255,255,255,0.4); border-top: 1px solid rgba(0,0,0,0.1); 
-        }
-        .tool-btn { 
-            background: white; border: 1px solid #ddd; border-radius: 8px; 
-            padding: 6px 12px; cursor: pointer; transition: 0.2s; font-weight: bold; font-size: 12px;
-        }
+        .tool-bar { display: flex; gap: 10px; padding: 10px 20px; background: rgba(255,255,255,0.4); border-top: 1px solid rgba(0,0,0,0.1); }
+        .tool-btn { background: white; border: 1px solid #ddd; border-radius: 8px; padding: 6px 12px; cursor: pointer; transition: 0.2s; font-weight: bold; font-size: 12px; }
         .tool-btn:hover { background: #e0e0e0; }
 
-        /* INPUT AREA */
         .input-area { background: rgba(255, 255, 255, 0.6); padding: 15px; display: flex; gap: 8px; border-top: 1px solid rgba(0,0,0,0.1); align-items: center; flex-wrap: wrap; }
         input[type="text"] { flex: 1; padding: 12px 15px; border: 1px solid #cbd5e1; border-radius: 20px; outline: none; font-size: 15px; min-width: 150px; background: white; }
         
@@ -309,23 +357,23 @@ async def serve_ui():
     </style>
 </head>
 <body>
-    <!-- OVERLAY -->
     <div id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
     <div class="main-app">
-        <!-- SIDEBAR -->
         <div id="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-title">
                     <img src="/icon.png" class="dog-icon" alt="Churky"> 
                     CHURKY PAGES
                 </div>
-                <button onclick="startNewChat()">+ New</button>
+                <div>
+                    <button onclick="startNewChat()">+ New</button>
+                    <button onclick="toggleSidebar()" style="background: none; color: #000; padding: 5px; font-size: 18px; margin-left: 5px;">✕</button>
+                </div>
             </div>
             <div id="chat-list"></div>
         </div>
         
-        <!-- HEADER -->
         <div class="header">
             <div class="header-left">
                 <button class="menu-btn" onclick="toggleSidebar()">☰</button>
@@ -338,19 +386,16 @@ async def serve_ui():
             </select>
         </div>
         
-        <!-- CHAT DISPLAY -->
         <div id="chat-box">
             <div class="msg ai-msg">Welcome back, Fernando. I am ready.</div>
         </div>
 
-        <!-- NEW TOOLBAR -->
         <div class="tool-bar">
             <button class="tool-btn" onclick="triggerTool('Photo')">📷 Photo</button>
             <button class="tool-btn" onclick="triggerTool('Code')">💻 Code</button>
             <button class="tool-btn" onclick="triggerTool('Fix')">🔧 Fixes</button>
         </div>
         
-        <!-- INPUT AREA -->
         <div class="input-area">
             <input type="file" id="img-input" accept="image/*" onchange="handleImage()">
             <input type="file" id="doc-input" accept=".pdf,.docx,.txt" onchange="handleDoc()">
@@ -367,7 +412,6 @@ async def serve_ui():
         let availableVoices = [];
         const chatBox = document.getElementById('chat-box'), input = document.getElementById('msg-input'), micBtn = document.getElementById('mic-btn'), sidebar = document.getElementById('sidebar'), overlay = document.getElementById('sidebar-overlay'), chatList = document.getElementById('chat-list'), modelSelector = document.getElementById('model-selector');
 
-        // --- SIDEBAR & UI TOGGLES ---
         function toggleSidebar() { 
             sidebar.classList.toggle('open'); 
             overlay.classList.toggle('active');
@@ -376,17 +420,16 @@ async def serve_ui():
 
         function triggerTool(tool) {
             if (tool === 'Photo') {
-                document.getElementById('img-input').click();
+                document.getElementById('img-input').click(); // Opens camera roll
             } else if (tool === 'Code') {
-                input.value = "Write code for: ";
+                input.value = "Write a complete, working script for the following request: ";
                 input.focus();
             } else if (tool === 'Fix') {
-                input.value = "Fix this code or text: ";
+                input.value = "Find the bugs in this code and provide the corrected version:\n\n";
                 input.focus();
             }
         }
 
-        // --- TEXT TO SPEECH ---
         function loadVoices() { availableVoices = window.speechSynthesis.getVoices(); }
         if (typeof window !== 'undefined' && window.speechSynthesis) { window.speechSynthesis.onvoiceschanged = loadVoices; loadVoices(); }
 
@@ -401,15 +444,17 @@ async def serve_ui():
             }
         }
 
-        // --- CHAT HISTORY ---
         async function loadChats() {
             try {
-                const res = await fetch('/chats'); const chats = await res.json(); chatList.innerHTML = '';
+                const res = await fetch('/chats'); 
+                if (!res.ok) throw new Error("Server returned " + res.status);
+                const chats = await res.json(); 
+                chatList.innerHTML = '';
                 if (!chats.length) chatList.innerHTML = '<div style="text-align:center; color:#94a3b8; font-size:12px; margin-top:20px;">No history yet.</div>';
                 chats.forEach(chat => {
                     const div = document.createElement('div'); div.className = 'chat-item'; div.innerText = chat.name; div.onclick = () => loadChat(chat.id); chatList.appendChild(div);
                 });
-            } catch(e) {}
+            } catch(e) { chatList.innerHTML = '<div style="color:red; font-size:12px;">Error: ' + e.message + '</div>'; }
         }
         
         async function loadChat(chatId) {
@@ -438,7 +483,6 @@ async def serve_ui():
             chatBox.appendChild(div); chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        // --- MEDIA & DOCUMENTS ---
         async function toggleRecording() {
             if (isRecording) { mediaRecorder.stop(); isRecording = false; micBtn.classList.remove('recording'); return; }
             try {
@@ -470,22 +514,63 @@ async def serve_ui():
             } catch(e) {}
         }
 
-        // --- SEND MESSAGE ---
         async function sendMessage() {
-            const text = input.value.trim(); if (!text && !imgBase64) return; input.value = '';
+            const text = input.value.trim(); 
+            if (!text && !imgBase64) return; 
+            input.value = '';
+            
             const selectedModel = modelSelector.value;
-            addMsg(text + (imgBase64 ? " [Image]" : ""), 'user-msg'); input.disabled = true;
+            addMsg(text + (imgBase64 ? " [Image]" : ""), 'user-msg'); 
+            input.disabled = true;
+            
             const thinkingId = "thinking-" + Date.now();
-            const thinkingDiv = document.createElement('div'); thinkingDiv.className = 'msg ai-msg'; thinkingDiv.id = thinkingId; thinkingDiv.innerText = 'Churky is thinking (' + selectedModel.split('-')[0] + ')...'; chatBox.appendChild(thinkingDiv); chatBox.scrollTop = chatBox.scrollHeight;
+            const thinkingDiv = document.createElement('div'); 
+            thinkingDiv.className = 'msg ai-msg'; 
+            thinkingDiv.id = thinkingId; 
+            thinkingDiv.innerText = 'Churky is thinking...'; 
+            chatBox.appendChild(thinkingDiv); 
+            chatBox.scrollTop = chatBox.scrollHeight;
 
             try {
-                const res = await fetch('/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: text || "Analyze this image", chat_id: currentChatId, image_base64: imgBase64, model: selectedModel }) });
-                const data = await res.json();
-                document.getElementById(thinkingId).remove();
-                if (res.ok) { addMsg(data.reply, 'ai-msg'); if(data.chat_id) currentChatId = data.chat_id; } 
-                else { addMsg("Error: " + data.detail, 'ai-msg'); }
-            } catch (e) { document.getElementById(thinkingId).remove(); addMsg("Connection lost.", 'ai-msg'); }
-            imgBase64 = null; document.getElementById('img-input').value = ''; input.disabled = false; input.focus();
+                // DALL-E INTERCEPT LOGIC
+                if (text.toLowerCase().startsWith("/image") || text.toLowerCase().includes("generate an image") || text.toLowerCase().includes("draw a")) {
+                    
+                    let promptText = text.replace(/\/image/gi, '').replace(/generate an image/gi, '').replace(/draw a/gi, '').trim();
+                    
+                    const res = await fetch('/edit_image?prompt=' + encodeURIComponent(promptText), { method: 'POST' });
+                    const data = await res.json();
+                    document.getElementById(thinkingId).remove();
+                    
+                    if (res.ok) {
+                        const imgDiv = document.createElement('div');
+                        imgDiv.className = 'msg ai-msg';
+                        imgDiv.innerHTML = `<p>Here is the generated image:</p><img src="${data.url}" style="width:100%; border-radius:10px; margin-top:10px;">`;
+                        chatBox.appendChild(imgDiv);
+                        chatBox.scrollTop = chatBox.scrollHeight;
+                    } else {
+                        addMsg("Error generating image: " + data.detail, 'ai-msg');
+                    }
+                } else {
+                    // NORMAL CHAT ROUTE
+                    const res = await fetch('/chat', { 
+                        method: 'POST', 
+                        headers: { 'Content-Type': 'application/json' }, 
+                        body: JSON.stringify({ message: text || "Analyze this image", chat_id: currentChatId, image_base64: imgBase64, model: selectedModel }) 
+                    });
+                    const data = await res.json();
+                    document.getElementById(thinkingId).remove();
+                    if (res.ok) { addMsg(data.reply, 'ai-msg'); if(data.chat_id) currentChatId = data.chat_id; } 
+                    else { addMsg("Error: " + data.detail, 'ai-msg'); }
+                }
+            } catch (e) { 
+                document.getElementById(thinkingId).remove(); 
+                addMsg("Connection lost.", 'ai-msg'); 
+            }
+            
+            imgBase64 = null; 
+            document.getElementById('img-input').value = ''; 
+            input.disabled = false; 
+            input.focus();
         }
     </script>
 </body>
