@@ -6,4 +6,5 @@ requests
 python-multipart
 PyPDF2
 python-docx
-anthropic
+duckduckgo-search
+supabase
